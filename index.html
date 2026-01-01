@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus Density</title>
+
+<style>
+:root{--main:#7cfbff;--sub:#00e5ff;}
+body{
+margin:0;height:100vh;overflow:hidden;
+display:flex;justify-content:center;align-items:center;
+background:#020808;color:#fff;font-family:system-ui;
+}
+#bg{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}
+canvas{position:absolute;inset:0;z-index:-2}
+
+.card{width:340px;text-align:center;background:none;border:none}
+.count{font-size:9rem;font-weight:100;line-height:1;transition:0.1s}
+.glow{text-shadow:0 0 35px var(--main);color:#fff}
+
+.leaderboard{margin-top:10px;font-size:1.4rem;font-weight:200;opacity:0.6;letter-spacing:2px}
+.rank{margin-top:40px;opacity:.3;font-size:0.9rem;letter-spacing:1px}
+</style>
+</head>
+
+<body>
+<div id="bg"></div>
+<canvas id="c"></canvas>
+
+<div class="card">
+  <div class="count" id="count">0</div>
+  <div class="leaderboard" id="rank-display">- / -</div>
+  <div class="rank" id="rank">×1</div>
+</div>
+
+<script>
+const GAS_URL = "ここにURLを貼る";
+const KEY="fd_global";
+
+let st=JSON.parse(localStorage.getItem(KEY))||{
+  secPerCount:2,
+  count:0,
+  progress:0,
+  name:"User"
+};
+
+const save=()=>localStorage.setItem(KEY,JSON.stringify(st));
+
+function getOrdinal(n){
+  let s=["th","st","nd","rd"],v=n%100;
+  return n+(s[(v-20)%10]||s[v]||s[0]);
+}
+
+async function sync(){
+  if(!GAS_URL.includes("http")) return;
+  try{
+    await fetch(GAS_URL,{method:"POST",body:JSON.stringify({name:st.name,score:st.count})});
+    const res=await fetch(GAS_URL);
+    const data=await res.json();
+    const sorted=data.sort((a,b)=>b[1]-a[1]);
+    const i=sorted.findIndex(r=>r[0]===st.name);
+    document.getElementById("rank-display").textContent=
+      (i!==-1?getOrdinal(i+1):"-")+" / "+sorted.length;
+  }catch(e){}
+}
+
+function ui(m){
+  const d=st.count.toLocaleString();
+  if(count.textContent!==d){
+    count.textContent=d;
+    count.classList.add("glow");
+    setTimeout(()=>count.classList.remove("glow"),150);
+    if(Math.floor(st.count/m)%10===0) sync();
+  }
+  rank.textContent="×"+m;
+}
+
+function theme(){
+  const h=new Date().getHours();
+  const t=h<6?["#7b5cff","#2b145c"]:
+          h<12?["#7cfbff","#a0f0ff"]:
+          h<18?["#5effc6","#7cffd6"]:
+                ["#ffb86c","#ff8c42"];
+  document.documentElement.style.setProperty("--main",t[0]);
+  bg.style.background=`radial-gradient(circle,${t[1]},#000)`;
+}
+theme();setInterval(theme,60000);
+
+const ctx=c.getContext("2d");
+c.width=innerWidth;c.height=innerHeight;
+let ps=[...Array(180)].map(()=>({
+  x:Math.random()*c.width,
+  y:Math.random()*c.height,
+  vx:(Math.random()-.5)*.3,
+  vy:(Math.random()-.5)*.3,
+  a:Math.random()
+}));
+
+(function loop(){
+  ctx.clearRect(0,0,c.width,c.height);
+  ps.forEach(p=>{
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0||p.x>c.width)p.vx*=-1;
+    if(p.y<0||p.y>c.height)p.vy*=-1;
+    ctx.fillStyle=`rgba(255,255,255,${p.a})`;
+    ctx.beginPath();ctx.arc(p.x,p.y,2,0,6.28);ctx.fill();
+  });
+  requestAnimationFrame(loop);
+})();
+
+let multi=1;
+addEventListener("mousemove",e=>{
+  const d=Math.min(e.clientX,innerWidth-e.clientX,e.clientY,innerHeight-e.clientY);
+  multi=d<160?1+Math.floor((160-d)/20):1;
+});
+
+let last=Date.now();
+setInterval(()=>{
+  const now=Date.now();
+  st.progress+=((now-last)/1000)*multi;
+  last=now;
+
+  const step=Math.floor(st.count/200000)+1;
+  if(st.progress>=st.secPerCount){
+    st.progress-=st.secPerCount;
+    st.count+=step;
+    if(st.count%1000===0) st.secPerCount+=0.05;
+    save();
+  }
+  ui(step);
+},50);
+
+sync();
+</script>
+</body>
+</html>
