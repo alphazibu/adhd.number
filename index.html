@@ -2,22 +2,25 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Focus Density</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus Density - リアルタイム匿名ランキング</title>
 
 <style>
-:root{--main:#7cfbff}
+:root{--main:#7cfbff;--sub:#00e5ff;}
 body{
 margin:0;height:100vh;overflow:hidden;
 display:flex;justify-content:center;align-items:center;
-background:#020808;color:#fff;font-family:system-ui
+background:#020808;color:#fff;font-family:system-ui;
 }
-#bg{position:absolute;inset:0;filter:blur(160px);z-index:-3}
+#bg{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}
 canvas{position:absolute;inset:0;z-index:-2}
-.card{text-align:center}
-.count{font-size:9rem;font-weight:100;line-height:1}
-.glow{text-shadow:0 0 35px var(--main)}
-.rank{margin-top:10px;opacity:.6}
+
+.card{width:340px;text-align:center;background:none;border:none}
+.count{font-size:9rem;font-weight:100;line-height:1;transition:0.1s}
+.glow{text-shadow:0 0 35px var(--main);color:#fff}
+
+.leaderboard{margin-top:10px;font-size:1.4rem;font-weight:200;opacity:0.6;letter-spacing:2px}
+.rank{margin-top:40px;opacity:.3;font-size:0.9rem;letter-spacing:1px}
 </style>
 </head>
 
@@ -27,60 +30,137 @@ canvas{position:absolute;inset:0;z-index:-2}
 
 <div class="card">
   <div class="count" id="count">0</div>
-  <div class="rank" id="rank">- / -</div>
+  <div class="leaderboard" id="rank-display">- / -</div>
+  <div class="rank" id="rank">×1</div>
 </div>
 
-<script>
-const RANKING_URL = "./ranking.json";
-const MY_ID = "global"; // 入力なし固定
-let count = 0;
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
 
-/* カウント進行 */
-setInterval(()=>{
-  count++;
-  countEl.textContent = count.toLocaleString();
-  countEl.classList.add("glow");
-  setTimeout(()=>countEl.classList.remove("glow"),120);
-},1000);
+// Firebase 設定
+const firebaseConfig = {
+  apiKey: "AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",
+  authDomain: "adhd-timer-f5d96.firebaseapp.com",
+  databaseURL: "https://adhd-timer-f5d96-default-rtdb.firebaseio.com",
+  projectId: "adhd-timer-f5d96",
+  storageBucket: "adhd-timer-f5d96.appspot.com",
+  messagingSenderId: "172916262460",
+  appId: "1:172916262460:web:c87ffd8e29a54dc18d6539",
+  measurementId: "G-M1S3L1RBG4"
+};
 
-/* ランキング取得（疑似リアルタイム） */
-async function updateRank(){
-  try{
-    const res = await fetch(RANKING_URL+"?t="+Date.now());
-    const json = await res.json();
-    const users = {...json.users,[MY_ID]:count};
-    const sorted = Object.entries(users)
-      .sort((a,b)=>b[1]-a[1]);
-    const r = sorted.findIndex(v=>v[0]===MY_ID)+1;
-    rank.textContent = (r>0?r:"-")+" / "+sorted.length;
-  }catch(e){}
-}
+// 初期化
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-setInterval(updateRank,5000);
-updateRank();
+// ローカルデータ
+const KEY="fd_global";
+let st=JSON.parse(localStorage.getItem(KEY))||{
+  secPerCount:2,
+  count:0,
+  progress:0
+};
+const save=()=>localStorage.setItem(KEY,JSON.stringify(st));
 
-/* 背景演出 */
-const ctx=c.getContext("2d");
-c.width=innerWidth;c.height=innerHeight;
-let ps=[...Array(120)].map(()=>({
+// 匿名ユーザーID
+const userId = 'user_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+
+// ランキング表示
+const rankDisplay = document.getElementById("rank-display");
+
+// 粒子アニメ用
+const ctx = c.getContext("2d");
+c.width = innerWidth; c.height = innerHeight;
+let ps = [...Array(180)].map(()=>({
   x:Math.random()*c.width,
   y:Math.random()*c.height,
   vx:(Math.random()-.5)*.3,
-  vy:(Math.random()-.5)*.3
+  vy:(Math.random()-.5)*.3,
+  a:Math.random()
 }));
 
 (function loop(){
   ctx.clearRect(0,0,c.width,c.height);
   ps.forEach(p=>{
-    p.x+=p.vx;p.y+=p.vy;
+    p.x+=p.vx; p.y+=p.vy;
     if(p.x<0||p.x>c.width)p.vx*=-1;
     if(p.y<0||p.y>c.height)p.vy*=-1;
-    ctx.fillStyle="rgba(255,255,255,.6)";
-    ctx.fillRect(p.x,p.y,2,2);
+    ctx.fillStyle=`rgba(255,255,255,${p.a})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,2,0,6.28); ctx.fill();
   });
   requestAnimationFrame(loop);
 })();
-</script>
 
+// UI要素
+const countEl = document.getElementById("count");
+const rankEl = document.getElementById("rank");
+function ui(m){
+  const d = st.count.toLocaleString();
+  if(countEl.textContent!==d){
+    countEl.textContent = d;
+    countEl.classList.add("glow");
+    setTimeout(()=>countEl.classList.remove("glow"),150);
+  }
+  rankEl.textContent = "×" + m;
+}
+
+// 背景テーマ
+function theme(){
+  const h = new Date().getHours();
+  const t = h<6?["#7b5cff","#2b145c"]:
+            h<12?["#7cfbff","#a0f0ff"]:
+            h<18?["#5effc6","#7cffd6"]:
+                  ["#ffb86c","#ff8c42"];
+  document.documentElement.style.setProperty("--main",t[0]);
+  bg.style.background=`radial-gradient(circle,${t[1]},#000)`;
+}
+theme(); setInterval(theme,60000);
+
+// カウント加速
+let multi=1;
+addEventListener("mousemove",e=>{
+  const d=Math.min(e.clientX,innerWidth-e.clientX,e.clientY,innerHeight-e.clientY);
+  multi=d<160?1+Math.floor((160-d)/20):1;
+});
+
+// 自分のスコアをFirebaseに送信
+function sendScore() {
+  set(ref(db, 'scores/' + userId), { score: st.count });
+}
+
+// ランキング計算
+function updateRanking() {
+  const scoresRef = ref(db, 'scores/');
+  onValue(scoresRef, snapshot=>{
+    const data = snapshot.val() || {};
+    const entries = Object.entries(data);
+    entries.sort((a,b)=>b[1].score - a[1].score); // 降順
+    const rank = entries.findIndex(r=>r[0]===userId) + 1;
+    rankDisplay.textContent = rank + " / " + entries.length;
+  });
+}
+
+// メインループ
+let last = Date.now();
+setInterval(()=>{
+  const now = Date.now();
+  st.progress += ((now-last)/1000)*multi;
+  last = now;
+
+  const step = Math.floor(st.count/200000)+1;
+  if(st.progress >= st.secPerCount){
+    st.progress -= st.secPerCount;
+    st.count += step;
+    if(st.count%1000===0) st.secPerCount+=0.05;
+    save();
+    sendScore(); // Firebaseに送信
+  }
+  ui(step);
+},50);
+
+// ランキング開始
+updateRanking();
+</script>
 </body>
 </html>
