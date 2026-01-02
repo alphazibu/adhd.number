@@ -54,7 +54,7 @@ if(!localStorage.uid){
 const uid = localStorage.uid;
 
 // ================== 状態 ==================
-let countVal = 0;
+let countVal = localStorage.countVal ? parseFloat(localStorage.countVal) : 0; // ローカル復元
 let last = Date.now();
 
 // ================== UI ==================
@@ -73,6 +73,7 @@ document.addEventListener("visibilitychange", () => {
       incE.style.opacity=1;
       incE.style.transform="translateY(-30px)";
       setTimeout(()=>incE.style.opacity=0,800);
+      localStorage.countVal = countVal; // 保存
     }
   }
 });
@@ -84,6 +85,8 @@ setInterval(()=>{
   last = now;
 
   countVal += dt;
+  localStorage.countVal = countVal; // 保存
+
   const stage = Math.floor(countVal/10000)+1;
 
   ce.textContent = Math.floor(countVal).toLocaleString();
