@@ -1,55 +1,52 @@
-// guard.js（フロント専用）
-import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
+// guard.js（フロント専用・最終強化）
+import { ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
 
 export function createGuard(db, uid){
-  let token = null;
-  let tokenExp = 0;
-  let lastCount = 0;
-  let lastAt = Date.now();
+  let token=null, tokenExp=0;
+  let lastCount=0, lastAt=Date.now();
 
-  // トークン取得 or 初回発行
   async function fetchToken(){
-    const snap = await get(ref(db, "tokens/"+uid));
-    if(!snap.exists()){
-      const t = Math.random().toString(36).slice(2);
-      const exp = Date.now() + 60_000; // 60秒有効
-      await set(ref(db,"tokens/"+uid), { t, exp });
-      token = t; tokenExp = exp;
-    } else {
-      const v = snap.val();
-      token = v.t;
-      tokenExp = v.exp;
+    const s = await get(ref(db,"tokens/"+uid));
+    if(!s.exists()){
+      token = Math.random().toString(36).slice(2);
+      tokenExp = Date.now()+60000;
+      await set(ref(db,"tokens/"+uid),{t:token,exp:tokenExp});
+    }else{
+      token=s.val().t; tokenExp=s.val().exp;
     }
   }
 
-  // 安全に送信
+  async function ban(reason){
+    await set(ref(db,"bans/"+uid),{at:Date.now(),reason});
+    await remove(ref(db,"scores/"+uid));   // ランキングから抹消
+    await remove(ref(db,"tokens/"+uid));
+    localStorage.removeItem("uid");
+    location.reload();
+  }
+
   async function secureSend(count){
-    if(!token || Date.now() > tokenExp) await fetchToken();
+    if(!token || Date.now()>tokenExp) await fetchToken();
 
-    const now = Date.now();
-    const dt = Math.max(1,(now-lastAt)/1000);
-    const delta = count - lastCount;
+    const now=Date.now();
+    const dt=Math.max(1,(now-lastAt)/1000);
+    const delta=count-lastCount;
 
-    // 増加量チェック（チート防止）
-    if(delta > dt*5){
-      await update(ref(db,"bans/"+uid), { at: now, reason:"speed" });
-      localStorage.removeItem("uid");
-      location.reload();
+    if(delta>dt*5){ // 異常増加
+      await ban("speed");
       return;
     }
 
-    lastCount = count;
-    lastAt = now;
+    lastCount=count; lastAt=now;
 
-    await update(ref(db,"scores/"+uid), {
-      count, t: now, sig: token
+    await update(ref(db,"scores/"+uid),{
+      count, t:now, sig:token
     });
   }
 
-  // BAN確認
   async function banCheck(){
     const s = await get(ref(db,"bans/"+uid));
     if(s.exists()){
+      await remove(ref(db,"scores/"+uid));
       localStorage.removeItem("uid");
       location.reload();
     }
