@@ -14,14 +14,15 @@ body{
 }
 #bg{position:absolute;inset:0;filter:blur(160px);z-index:-3}
 canvas{position:absolute;inset:0;z-index:-2}
-.card{text-align:center}
+
+.card{text-align:center;position:relative}
 .count{font-size:9rem;font-weight:100}
-.glow{text-shadow:0 0 40px var(--main)}
-.leaderboard{opacity:.6}
-.rank{font-size:2rem;margin-top:20px}
+.leaderboard{opacity:.6;margin-top:6px}
+.rank{font-size:2rem;margin-top:24px}
 .increase{
   position:absolute;bottom:20px;
-  opacity:0;font-size:1.5rem;
+  font-size:1.5rem;
+  opacity:0;
   transition:.8s;
 }
 </style>
@@ -48,22 +49,22 @@ const app = initializeApp({
 });
 const db = getDatabase(app);
 
-// UID固定
+// UID
 if(!localStorage.uid) localStorage.uid="u"+Math.random().toString(36).slice(2);
 const uid=localStorage.uid;
-
-// UI
-const ce=count, lbE=lb, me=multi, incE=inc;
 
 // 状態
 let countVal=0;
 let last=Date.now();
 
-// Firebaseから先に復元（←超重要）
+// Firebase復元（最優先）
 const snap = await get(ref(db,"scores/"+uid));
-if(snap.exists()) countVal=snap.val().count||0;
+if(snap.exists()) countVal = snap.val().count || 0;
 
-// 非表示加算
+// UI
+const ce=count, lbE=lb, me=multi, incE=inc;
+
+// 非表示中カウント
 let hiddenAt=0;
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden) hiddenAt=Date.now();
@@ -73,13 +74,13 @@ document.addEventListener("visibilitychange",()=>{
       countVal+=g;
       incE.textContent="+"+g;
       incE.style.opacity=1;
-      incE.style.transform="translateY(-40px)";
+      incE.style.transform="translateY(-30px)";
       setTimeout(()=>incE.style.opacity=0,800);
     }
   }
 });
 
-// メインループ
+// メインループ（光らない）
 setInterval(()=>{
   const now=Date.now();
   const dt=(now-last)/1000; last=now;
@@ -88,8 +89,6 @@ setInterval(()=>{
 
   ce.textContent=Math.floor(countVal).toLocaleString();
   me.textContent="×"+m;
-  ce.classList.add("glow");
-  setTimeout(()=>ce.classList.remove("glow"),150);
 
   set(ref(db,"scores/"+uid),{
     count:Math.floor(countVal),
@@ -109,23 +108,38 @@ onValue(ref(db,"scores"),s=>{
 // 背景
 function theme(){
   const h=new Date().getHours();
-  const c=h<6?["#7b5cff","#2b145c"]:h<18?["#7cfbff","#5effc6"]:["#ffb86c","#ff8c42"];
+  const c=h<6?["#7b5cff","#2b145c"]:
+          h<18?["#7cfbff","#5effc6"]:
+               ["#ffb86c","#ff8c42"];
   document.documentElement.style.setProperty("--main",c[0]);
   bg.style.background=`radial-gradient(circle,${c[1]},#000)`;
 }
-theme();setInterval(theme,60000);
+theme(); setInterval(theme,60000);
 
-// 粒子
-const cv=c,x=cv.getContext("2d");
-cv.width=innerWidth;cv.height=innerHeight;
-let p=[...Array(120)].map(()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3}));
+// canvas
+const cv=c, ctx=cv.getContext("2d");
+function resize(){
+  cv.width=innerWidth;
+  cv.height=innerHeight;
+}
+window.addEventListener("resize",resize);
+resize();
+
+// 粒子（静か）
+let p=[...Array(120)].map(()=>({
+  x:Math.random()*cv.width,
+  y:Math.random()*cv.height,
+  vx:(Math.random()-.5)*.25,
+  vy:(Math.random()-.5)*.25
+}));
 (function loop(){
-  x.clearRect(0,0,cv.width,cv.height);
+  ctx.clearRect(0,0,cv.width,cv.height);
   p.forEach(o=>{
-    o.x+=o.vx;o.y+=o.vy;
+    o.x+=o.vx; o.y+=o.vy;
     if(o.x<0||o.x>cv.width)o.vx*=-1;
     if(o.y<0||o.y>cv.height)o.vy*=-1;
-    x.fillRect(o.x,o.y,2,2);
+    ctx.fillStyle="rgba(255,255,255,.4)";
+    ctx.fillRect(o.x,o.y,2,2);
   });
   requestAnimationFrame(loop);
 })();
