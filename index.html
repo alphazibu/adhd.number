@@ -13,14 +13,29 @@ body{
 }
 #bg{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}
 canvas{position:absolute;inset:0;z-index:-2}
-.card{width:340px;text-align:center;background:none;border:none;position:relative;}
-.count{font-size:9rem;font-weight:100;line-height:1;}
+.card{
+  width:340px;text-align:center;background:none;border:none;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.count{
+  font-size:9rem;font-weight:100;line-height:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
 .glow{text-shadow:0 0 35px var(--main);color:#fff;}
-.leaderboard{margin-top:10px;font-size:1.4rem;font-weight:200;opacity:0.6;letter-spacing:2px}
-.rank{margin-top:40px;opacity:.3;font-size:0.9rem;letter-spacing:1px}
+.leaderboard{
+  margin-top:10px;font-size:1.4rem;font-weight:200;opacity:0.6;letter-spacing:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;
+}
+.rank{
+  margin-top:40px;opacity:.9;font-size:2rem;font-weight:600;
+  letter-spacing:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  width:100%;text-align:center;
+  position:relative; /* これで中央に固定 */
+}
 .increase-msg{
   font-size:1.5rem;color:#7cfbff;position:absolute;left:50%;bottom:0;transform:translateX(-50%) translateY(0);
   opacity:0; pointer-events:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 </style>
 </head>
@@ -62,6 +77,12 @@ if(!localStorage.getItem("fd_name")){
   if(n){ st.name=n; localStorage.setItem("fd_name", n); }
 }else{ st.name = localStorage.getItem("fd_name"); }
 
+// --- UID作成（同名ユーザー対策） ---
+if(!localStorage.getItem("fd_uid")){
+  localStorage.setItem("fd_uid", 'u' + Math.floor(Math.random()*1000000));
+}
+const uid = localStorage.getItem("fd_uid");
+
 const save=()=>localStorage.setItem(KEY, JSON.stringify(st));
 const countEl = document.getElementById('count');
 const rankEl = document.getElementById('rank');
@@ -70,7 +91,8 @@ const leaderboardEl = document.getElementById('rank-display');
 
 function ui(mult, glow=false){
   countEl.textContent = Math.floor(st.count).toLocaleString();
-  rankEl.textContent = "×"+mult;
+  rankEl.textContent = "×"+mult; // 常に倍率表示
+  // 真ん中に固定されるようCSSで調整済
   if(glow){
     countEl.classList.add('glow');
     setTimeout(()=>countEl.classList.remove('glow'),300);
@@ -81,8 +103,7 @@ function ui(mult, glow=false){
 function animateIncrease(amount){
   if(amount <=0) return;
   msgEl.style.opacity = 1;
-  let y = 0;
-  msgEl.style.transform = `translateX(-50%) translateY(${y}px)`;
+  msgEl.style.transform = `translateX(-50%) translateY(0)`;
   msgEl.textContent = "+" + amount.toLocaleString();
   
   const duration = 1000;
@@ -149,7 +170,7 @@ document.addEventListener("visibilitychange", ()=>{
 
 // --- Firebase 保存＆ランキング ---
 function saveScore() {
-  set(ref(db, 'scores/' + st.name), {
+  set(ref(db, 'scores/' + uid), {
     count: Math.floor(st.count),
     name: st.name
   });
@@ -185,8 +206,8 @@ setInterval(()=>{
   st.count += elapsed * speed * stepMulti;
   save();
   saveScore();     // Firebaseに保存
-  ui(stepMulti, glow);
-  updateRanking(); // ランキング更新
+  ui(stepMulti, glow); // 倍率表示
+  updateRanking();   // ランキング更新
 },50);
 
 </script>
