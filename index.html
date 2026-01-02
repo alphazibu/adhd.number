@@ -39,7 +39,7 @@ canvas{position:absolute;inset:0;z-index:-2}
 <script type="module">
 // ================== Firebase 初期化 ==================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
 
 const app = initializeApp({
   apiKey: "AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",
@@ -78,7 +78,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ================== メインループ ==================
-setInterval(async ()=>{
+setInterval(()=>{
   const now = Date.now();
   const dt = (now-last)/1000;
   last = now;
@@ -141,5 +141,10 @@ let p = [...Array(120)].map(() => ({
   requestAnimationFrame(loop);
 })();
 </script>
+
+<!-- ================== 外部JS読み込み ================== -->
+<script src="banCheck.js"></script>
+<script src="guard.js"></script>
+
 </body>
 </html>
