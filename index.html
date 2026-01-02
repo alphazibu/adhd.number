@@ -11,17 +11,18 @@ body{
   display:flex;justify-content:center;align-items:center;
   background:#020808;color:#fff;font-family:system-ui;
 }
-#bg{position:absolute;inset:0;filter:blur(160px);z-index:-3}
+/* 背景が真っ黒にならないよう、デフォルトでグラデーションを設定 */
+#bg{
+  position:absolute;inset:0;
+  background: radial-gradient(circle at center, #1a2a6c, #b21f1f, #fdbb2d);
+  background-size: 200% 200%;
+  filter:blur(100px);z-index:-3;
+  opacity: 0.5;
+}
 canvas{position:absolute;inset:0;z-index:-2}
 .card{text-align:center;position:relative}
-.count{font-size:9rem;font-weight:100}
-.leaderboard{opacity:.6;margin-top:6px}
-.rank{font-size:2rem;margin-top:24px}
-.increase{
-  position:absolute;bottom:20px;
-  font-size:1.5rem;
-  opacity:0;transition:.8s;
-}
+.count{font-size:8rem;font-weight:100;letter-spacing:-2px;margin:0}
+.rank{font-size:2rem;margin-top:20px;color:var(--main);font-weight:bold}
 </style>
 </head>
 <body>
@@ -30,124 +31,68 @@ canvas{position:absolute;inset:0;z-index:-2}
 <canvas id="c"></canvas>
 
 <div class="card">
-  <div class="count" id="count">0</div>
-  <div class="leaderboard" id="lb">- / -</div>
-  <div class="rank" id="stage">×1</div>
-  <div class="increase" id="inc"></div>
+  <div class="count" id="countDisplay">0</div>
+  <div class="rank" id="rankDisplay">×1</div>
 </div>
 
 <script type="module">
-// ================== Firebase 初期化 ==================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
+import { createGuard } from "./guard.js";
 
-const app = initializeApp({
-  apiKey: "AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",
-  databaseURL: "https://adhd-timer-f5d96-default-rtdb.firebaseio.com"
-});
-const db = getDatabase(app);
-
-// ================== UID ==================
-if(!localStorage.uid){
-  localStorage.uid = "u"+Math.random().toString(36).slice(2);
-}
+// --- 初期設定 ---
+if(!localStorage.uid) localStorage.uid = "u"+Math.random().toString(36).slice(2);
 const uid = localStorage.uid;
+const guard = createGuard({}, uid);
 
-// ================== 状態 ==================
-let countVal = localStorage.countVal ? parseFloat(localStorage.countVal) : 0; // ローカル復元
-let last = Date.now();
+let countVal = localStorage.countVal ? parseFloat(localStorage.countVal) : 0;
+let lastUpdate = Date.now();
 
-// ================== UI ==================
-const ce = count, lbE = lb, stE = stage, incE = inc;
-
-// ================== 非表示加算 ==================
-let hiddenAt = 0;
-document.addEventListener("visibilitychange", () => {
-  if(document.hidden){
-    hiddenAt = Date.now();
-  } else {
-    const g = Math.floor((Date.now()-hiddenAt)/1000)*2;
-    if(g>0){
-      countVal += g;
-      incE.textContent = "+"+g;
-      incE.style.opacity=1;
-      incE.style.transform="translateY(-30px)";
-      setTimeout(()=>incE.style.opacity=0,800);
-      localStorage.countVal = countVal; // 保存
-    }
-  }
-});
-
-// ================== メインループ ==================
-setInterval(()=>{
+// --- 数値更新ループ ---
+function updateLoop() {
   const now = Date.now();
-  const dt = (now-last)/1000;
-  last = now;
+  const dt = (now - lastUpdate) / 1000;
+  lastUpdate = now;
 
   countVal += dt;
-  localStorage.countVal = countVal; // 保存
+  localStorage.countVal = countVal;
 
-  const stage = Math.floor(countVal/10000)+1;
-
-  ce.textContent = Math.floor(countVal).toLocaleString();
-  stE.textContent = "×"+stage;
-
-  // Firebaseに送信（リアルタイム更新）
-  set(ref(db,"scores/"+uid),{
-    count: Math.floor(countVal),
-    t: now
-  });
-},100);
-
-// ================== ランキング取得 ==================
-onValue(ref(db,"scores"), snap => {
-  let higher = 0, total = 0;
-  snap.forEach(c => {
-    total++;
-    if(c.val().count > Math.floor(countVal)) higher++;
-  });
-  lbE.textContent = `${higher+1} / ${total}`;
-});
-
-// ================== 背景 ==================
-function theme(){
-  const h = new Date().getHours();
-  const c = h<6?["#7b5cff","#2b145c"]:
-          h<18?["#7cfbff","#5effc6"]:
-               ["#ffb86c","#ff8c42"];
-  document.documentElement.style.setProperty("--main",c[0]);
-  bg.style.background = `radial-gradient(circle,${c[1]},#000)`;
+  // 画面に数値を反映
+  document.getElementById("countDisplay").textContent = Math.floor(countVal).toLocaleString();
+  document.getElementById("rankDisplay").textContent = "×" + (Math.floor(countVal / 10000) + 1);
+  
+  requestAnimationFrame(updateLoop);
 }
-theme(); setInterval(theme,60000);
+updateLoop();
 
-// ================== canvas ==================
-const cv=c, ctx=cv.getContext("2d");
-function resize(){cv.width=innerWidth;cv.height=innerHeight}
-addEventListener("resize",resize); resize();
+// --- 3秒ごとにセキュリティチェック ---
+setInterval(() => {
+  guard.secureSend(countVal);
+}, 3000);
 
-let p = [...Array(120)].map(() => ({
-  x: Math.random()*cv.width,
-  y: Math.random()*cv.height,
-  vx: (Math.random()-.5)*.25,
-  vy: (Math.random()-.5)*.25
+// --- 背景粒子アニメーション ---
+const cv=document.getElementById("c");
+const ctx=cv.getContext("2d");
+function resize(){cv.width=window.innerWidth;cv.height=window.innerHeight}
+window.onresize=resize; resize();
+
+let pts = Array(80).fill().map(()=>({
+  x:Math.random()*cv.width, 
+  y:Math.random()*cv.height, 
+  vx:(Math.random()-0.5)*0.5, 
+  vy:(Math.random()-0.5)*0.5
 }));
 
-(function loop(){
+function draw() {
   ctx.clearRect(0,0,cv.width,cv.height);
-  p.forEach(o=>{
-    o.x += o.vx; o.y += o.vy;
-    if(o.x<0||o.x>cv.width)o.vx*=-1;
-    if(o.y<0||o.y>cv.height)o.vy*=-1;
-    ctx.fillStyle="rgba(255,255,255,.4)";
-    ctx.fillRect(o.x,o.y,2,2);
+  ctx.fillStyle="rgba(255,255,255,0.3)";
+  pts.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<0||p.x>cv.width)p.vx*=-1;
+    if(p.y<0||p.y>cv.height)p.vy*=-1;
+    ctx.fillRect(p.x,p.y,2,2);
   });
-  requestAnimationFrame(loop);
-})();
+  requestAnimationFrame(draw);
+}
+draw();
 </script>
-
-<!-- ================== 外部JS読み込み ================== -->
-<script src="banCheck.js"></script>
-<script src="guard.js"></script>
-
 </body>
 </html>
