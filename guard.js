@@ -1,58 +1,53 @@
-// guard.js（新規ファイル・フロント用）
-(() => {
-  const UID_KEY = "uid";
-  const FLAG_KEY = "cheatFlag";
-  const LAST_SEND = "lastSend";
-  const MAX_JUMP = 5000;      // 1送信で許容する最大増分
-  const MIN_INTERVAL = 800;  // 送信間隔(ms)
+// guard.js（フロント用・追加ファイル）
+import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
 
-  const uid = localStorage.getItem(UID_KEY);
-  if (!uid) return;
+export function createGuard(db, uid){
+  let token = null;
+  let tokenExp = 0;
+  let lastCount = 0;
+  let lastAt = Date.now();
 
-  // BAN確認（即時）
-  fetch(`https://YOUR-REGION-YOUR-PROJECT.cloudfunctions.net/banCheck?uid=${uid}`)
-    .then(r => r.ok ? r.json() : Promise.reject())
-    .then(j => {
-      if (j.banned) hardBan();
-    })
-    .catch(()=>{});
-
-  // 送信前ガード（index側から window.safeSend を使う）
-  window.safeSend = (count) => {
-    const now = Date.now();
-    const last = Number(localStorage.getItem(LAST_SEND) || 0);
-    if (now - last < MIN_INTERVAL) flag();
-
-    const prev = Number(sessionStorage.prevCount || 0);
-    if (count - prev > MAX_JUMP) flag();
-
-    sessionStorage.prevCount = count;
-    localStorage.setItem(LAST_SEND, now);
-
-    if (localStorage.getItem(FLAG_KEY) === "1") {
-      report(uid, "client_detect");
-      hardBan();
-      return false;
+  async function fetchToken(){
+    const snap = await get(ref(db, "tokens/"+uid));
+    if(!snap.exists()){
+      const t = Math.random().toString(36).slice(2);
+      const exp = Date.now() + 60_000; // 1分有効
+      await set(ref(db,"tokens/"+uid), { t, exp });
+      token = t; tokenExp = exp;
+    } else {
+      const v = snap.val();
+      token = v.t;
+      tokenExp = v.exp;
     }
-    return true;
-  };
-
-  function flag(){
-    localStorage.setItem(FLAG_KEY, "1");
   }
 
-  function report(uid, reason){
-    fetch(`https://YOUR-REGION-YOUR-PROJECT.cloudfunctions.net/reportCheat`,{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({ uid, reason, t:Date.now() })
-    }).catch(()=>{});
+  async function secureSend(count){
+    if(!token || Date.now()>tokenExp) await fetchToken();
+
+    const now = Date.now();
+    const dt = Math.max(1,(now-lastAt)/1000);
+    const delta = count - lastCount;
+    if(delta > dt*5){ // 1秒あたり上限5カウント
+      await update(ref(db,"bans/"+uid), { at: now, reason:"speed" });
+      localStorage.removeItem("uid");
+      location.reload();
+      return;
+    }
+
+    lastCount = count; lastAt = now;
+
+    await update(ref(db,"scores/"+uid), {
+      count, t: now, sig: token
+    });
   }
 
-  function hardBan(){
-    localStorage.removeItem(UID_KEY);
-    localStorage.removeItem(FLAG_KEY);
-    sessionStorage.clear();
-    location.reload();
+  async function banCheck(){
+    const s = await get(ref(db,"bans/"+uid));
+    if(s.exists()){
+      localStorage.removeItem("uid");
+      location.reload();
+    }
   }
-})();
+
+  return { fetchToken, secureSend, banCheck };
+}
