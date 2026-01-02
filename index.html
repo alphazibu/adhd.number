@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Focus Density</title>
 <style>
-:root{--main:#7cfbff;--sub:#00e5ff;}
+:root{--main:#7cfbff}
 body{
   margin:0;height:100vh;overflow:hidden;
   display:flex;justify-content:center;align-items:center;
   background:#020808;color:#fff;font-family:system-ui;
 }
-#bg{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}
+#bg{position:absolute;inset:0;filter:blur(160px);z-index:-3}
 canvas{position:absolute;inset:0;z-index:-2}
 .card{
   width:340px;text-align:center;position:relative;
@@ -19,11 +19,18 @@ canvas{position:absolute;inset:0;z-index:-2}
 }
 .count{font-size:9rem;font-weight:100;line-height:1}
 .glow{text-shadow:0 0 35px var(--main)}
-.leaderboard{
-  margin-top:10px;font-size:1.4rem;font-weight:200;
-  opacity:.6;letter-spacing:2px
-}
+.leaderboard{margin-top:10px;font-size:1.4rem;opacity:.6}
 .rank{margin-top:40px;font-size:2rem;font-weight:600}
+.increase-msg{
+  position:absolute;
+  left:50%;
+  top:65%;
+  transform:translateX(-50%);
+  font-size:1.5rem;
+  color:var(--main);
+  opacity:0;
+  pointer-events:none;
+}
 </style>
 </head>
 <body>
@@ -35,35 +42,42 @@ canvas{position:absolute;inset:0;z-index:-2}
   <div class="count" id="count">0</div>
   <div class="leaderboard" id="rank-display">- / -</div>
   <div class="rank" id="rank">×1</div>
+  <div class="increase-msg" id="increase-msg"></div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
 
-const firebaseConfig={
+const app=initializeApp({
   apiKey:"AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",
   authDomain:"adhd-timer-f5d96.firebaseapp.com",
   databaseURL:"https://adhd-timer-f5d96-default-rtdb.firebaseio.com",
   projectId:"adhd-timer-f5d96"
-};
-
-const app=initializeApp(firebaseConfig);
+});
 const db=getDatabase(app);
 
-// ===== UID =====
+// UID
 if(!localStorage.getItem("fd_uid")){
   localStorage.setItem("fd_uid","u"+Math.floor(Math.random()*1e9));
 }
 const uid=localStorage.getItem("fd_uid");
 
-// ===== 状態 =====
-let st=JSON.parse(localStorage.getItem("fd_state"))||{count:0};
-const save=()=>localStorage.setItem("fd_state",JSON.stringify(st));
+// state保持
+const KEY="fd_state";
+let st=JSON.parse(localStorage.getItem(KEY))||{count:0,last:Date.now()};
+const save=()=>localStorage.setItem(KEY,JSON.stringify(st));
+
+// 復帰時オフライン加算
+const now=Date.now();
+const offlineSec=Math.floor((now-st.last)/1000);
+if(offlineSec>0) st.count+=offlineSec*2;
+st.last=now; save();
 
 const countEl=document.getElementById("count");
 const rankEl=document.getElementById("rank");
 const boardEl=document.getElementById("rank-display");
+const msgEl=document.getElementById("increase-msg");
 
 function ui(mult,glow=false){
   countEl.textContent=Math.floor(st.count).toLocaleString();
@@ -74,7 +88,23 @@ function ui(mult,glow=false){
   }
 }
 
-// ===== 背景テーマ =====
+// ＋アニメ（確実に表示）
+function animateIncrease(amount){
+  if(amount<=0) return;
+  msgEl.textContent="+"+amount.toLocaleString();
+  msgEl.style.opacity=1;
+
+  const start=performance.now(),dur=1000;
+  (function step(t){
+    const p=Math.min((t-start)/dur,1);
+    msgEl.style.transform=
+      `translateX(-50%) translateY(${-30*p}px)`;
+    msgEl.style.opacity=1-p;
+    if(p<1) requestAnimationFrame(step);
+  })(start);
+}
+
+// 背景
 function theme(){
   const h=new Date().getHours();
   const t=h<6?["#7b5cff","#2b145c"]
@@ -86,21 +116,17 @@ function theme(){
 }
 theme(); setInterval(theme,60000);
 
-// ===== 粒子 =====
-const c=document.getElementById("c");
-const ctx=c.getContext("2d");
-c.width=innerWidth; c.height=innerHeight;
-let ps=[...Array(180)].map(()=>({
-  x:Math.random()*c.width,
-  y:Math.random()*c.height,
-  vx:(Math.random()-.5)*0.3,
-  vy:(Math.random()-.5)*0.3,
-  a:Math.random()
+// 粒子
+const c=document.getElementById("c"),ctx=c.getContext("2d");
+c.width=innerWidth;c.height=innerHeight;
+let ps=[...Array(160)].map(()=>({
+  x:Math.random()*c.width,y:Math.random()*c.height,
+  vx:(Math.random()-.5)*0.3,vy:(Math.random()-.5)*0.3,a:Math.random()
 }));
 (function loop(){
   ctx.clearRect(0,0,c.width,c.height);
   ps.forEach(p=>{
-    p.x+=p.vx; p.y+=p.vy;
+    p.x+=p.vx;p.y+=p.vy;
     if(p.x<0||p.x>c.width)p.vx*=-1;
     if(p.y<0||p.y>c.height)p.vy*=-1;
     ctx.fillStyle=`rgba(255,255,255,${p.a})`;
@@ -109,32 +135,42 @@ let ps=[...Array(180)].map(()=>({
   requestAnimationFrame(loop);
 })();
 
-// ===== Firebase保存 =====
+// Firebase
 function saveScore(){
-  set(ref(db,"scores/"+uid),{
-    uid,
-    count:Math.floor(st.count)
-  });
+  set(ref(db,"scores/"+uid),{uid,count:Math.floor(st.count)});
 }
-
-// ===== ランキング（総参加者数）=====
 onValue(ref(db,"scores"),snap=>{
   const total=snap.size;
-  let arr=[];
-  snap.forEach(c=>arr.push(c.val()));
+  let arr=[];snap.forEach(c=>arr.push(c.val()));
   arr.sort((a,b)=>b.count-a.count);
   const r=arr.findIndex(u=>u.uid===uid)+1;
   boardEl.textContent=`${r} / ${total}`;
 });
 
-// ===== メインループ =====
+// 表示切替
+let hiddenAt=Date.now(),active=true;
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){
+    active=false;
+    hiddenAt=Date.now();
+  }else{
+    active=true;
+    const sec=Math.floor((Date.now()-hiddenAt)/1000);
+    const gained=sec*2;
+    st.count+=gained;
+    animateIncrease(gained);
+  }
+});
+
+// メインループ
 let last=Date.now();
 setInterval(()=>{
   const now=Date.now();
   const dt=(now-last)/1000; last=now;
   const mult=Math.floor(st.count/10000)+1;
-  st.count+=dt*mult;
-  save(); saveScore(); ui(mult,false);
+  st.count+=dt*(active?1:2)*mult;
+  st.last=Date.now();
+  save(); saveScore(); ui(mult,!active);
 },50);
 </script>
 </body>
