@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Focus Density</title>
+
 <style>
-:root{--main:#7cfbff}
+:root{--main:#7cfbff;}
 body{
   margin:0;height:100vh;overflow:hidden;
   display:flex;justify-content:center;align-items:center;
@@ -13,165 +14,121 @@ body{
 }
 #bg{position:absolute;inset:0;filter:blur(160px);z-index:-3}
 canvas{position:absolute;inset:0;z-index:-2}
-.card{
-  width:340px;text-align:center;position:relative;
-  display:flex;flex-direction:column;align-items:center;
-}
-.count{font-size:9rem;font-weight:100;line-height:1}
-.glow{text-shadow:0 0 35px var(--main)}
-.leaderboard{margin-top:10px;font-size:1.4rem;opacity:.6}
-.rank{margin-top:40px;font-size:2rem;font-weight:600}
-.increase-msg{
-  position:absolute;
-  left:50%;
-  top:65%;
-  transform:translateX(-50%);
-  font-size:1.5rem;
-  color:var(--main);
-  opacity:0;
-  pointer-events:none;
+.card{text-align:center}
+.count{font-size:9rem;font-weight:100}
+.glow{text-shadow:0 0 40px var(--main)}
+.leaderboard{opacity:.6}
+.rank{font-size:2rem;margin-top:20px}
+.increase{
+  position:absolute;bottom:20px;
+  opacity:0;font-size:1.5rem;
+  transition:.8s;
 }
 </style>
 </head>
-<body>
 
+<body>
 <div id="bg"></div>
 <canvas id="c"></canvas>
 
 <div class="card">
   <div class="count" id="count">0</div>
-  <div class="leaderboard" id="rank-display">- / -</div>
-  <div class="rank" id="rank">×1</div>
-  <div class="increase-msg" id="increase-msg"></div>
+  <div class="leaderboard" id="lb">- / -</div>
+  <div class="rank" id="multi">×1</div>
+  <div class="increase" id="inc"></div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
 
-const app=initializeApp({
+const app = initializeApp({
   apiKey:"AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",
-  authDomain:"adhd-timer-f5d96.firebaseapp.com",
-  databaseURL:"https://adhd-timer-f5d96-default-rtdb.firebaseio.com",
-  projectId:"adhd-timer-f5d96"
+  databaseURL:"https://adhd-timer-f5d96-default-rtdb.firebaseio.com"
 });
-const db=getDatabase(app);
+const db = getDatabase(app);
 
-// UID
-if(!localStorage.getItem("fd_uid")){
-  localStorage.setItem("fd_uid","u"+Math.floor(Math.random()*1e9));
-}
-const uid=localStorage.getItem("fd_uid");
+// UID固定
+if(!localStorage.uid) localStorage.uid="u"+Math.random().toString(36).slice(2);
+const uid=localStorage.uid;
 
-// state保持
-const KEY="fd_state";
-let st=JSON.parse(localStorage.getItem(KEY))||{count:0,last:Date.now()};
-const save=()=>localStorage.setItem(KEY,JSON.stringify(st));
+// UI
+const ce=count, lbE=lb, me=multi, incE=inc;
 
-// 復帰時オフライン加算
-const now=Date.now();
-const offlineSec=Math.floor((now-st.last)/1000);
-if(offlineSec>0) st.count+=offlineSec*2;
-st.last=now; save();
+// 状態
+let countVal=0;
+let last=Date.now();
 
-const countEl=document.getElementById("count");
-const rankEl=document.getElementById("rank");
-const boardEl=document.getElementById("rank-display");
-const msgEl=document.getElementById("increase-msg");
+// Firebaseから先に復元（←超重要）
+const snap = await get(ref(db,"scores/"+uid));
+if(snap.exists()) countVal=snap.val().count||0;
 
-function ui(mult,glow=false){
-  countEl.textContent=Math.floor(st.count).toLocaleString();
-  rankEl.textContent="×"+mult;
-  if(glow){
-    countEl.classList.add("glow");
-    setTimeout(()=>countEl.classList.remove("glow"),300);
-  }
-}
-
-// ＋アニメ（確実に表示）
-function animateIncrease(amount){
-  if(amount<=0) return;
-  msgEl.textContent="+"+amount.toLocaleString();
-  msgEl.style.opacity=1;
-
-  const start=performance.now(),dur=1000;
-  (function step(t){
-    const p=Math.min((t-start)/dur,1);
-    msgEl.style.transform=
-      `translateX(-50%) translateY(${-30*p}px)`;
-    msgEl.style.opacity=1-p;
-    if(p<1) requestAnimationFrame(step);
-  })(start);
-}
-
-// 背景
-function theme(){
-  const h=new Date().getHours();
-  const t=h<6?["#7b5cff","#2b145c"]
-    :h<12?["#7cfbff","#a0f0ff"]
-    :h<18?["#5effc6","#7cffd6"]
-    :["#ffb86c","#ff8c42"];
-  document.documentElement.style.setProperty("--main",t[0]);
-  bg.style.background=`radial-gradient(circle, ${t[1]}, #000)`;
-}
-theme(); setInterval(theme,60000);
-
-// 粒子
-const c=document.getElementById("c"),ctx=c.getContext("2d");
-c.width=innerWidth;c.height=innerHeight;
-let ps=[...Array(160)].map(()=>({
-  x:Math.random()*c.width,y:Math.random()*c.height,
-  vx:(Math.random()-.5)*0.3,vy:(Math.random()-.5)*0.3,a:Math.random()
-}));
-(function loop(){
-  ctx.clearRect(0,0,c.width,c.height);
-  ps.forEach(p=>{
-    p.x+=p.vx;p.y+=p.vy;
-    if(p.x<0||p.x>c.width)p.vx*=-1;
-    if(p.y<0||p.y>c.height)p.vy*=-1;
-    ctx.fillStyle=`rgba(255,255,255,${p.a})`;
-    ctx.beginPath();ctx.arc(p.x,p.y,2,0,6.28);ctx.fill();
-  });
-  requestAnimationFrame(loop);
-})();
-
-// Firebase
-function saveScore(){
-  set(ref(db,"scores/"+uid),{uid,count:Math.floor(st.count)});
-}
-onValue(ref(db,"scores"),snap=>{
-  const total=snap.size;
-  let arr=[];snap.forEach(c=>arr.push(c.val()));
-  arr.sort((a,b)=>b.count-a.count);
-  const r=arr.findIndex(u=>u.uid===uid)+1;
-  boardEl.textContent=`${r} / ${total}`;
-});
-
-// 表示切替
-let hiddenAt=Date.now(),active=true;
+// 非表示加算
+let hiddenAt=0;
 document.addEventListener("visibilitychange",()=>{
-  if(document.hidden){
-    active=false;
-    hiddenAt=Date.now();
-  }else{
-    active=true;
-    const sec=Math.floor((Date.now()-hiddenAt)/1000);
-    const gained=sec*2;
-    st.count+=gained;
-    animateIncrease(gained);
+  if(document.hidden) hiddenAt=Date.now();
+  else{
+    const g=Math.floor((Date.now()-hiddenAt)/1000)*2;
+    if(g>0){
+      countVal+=g;
+      incE.textContent="+"+g;
+      incE.style.opacity=1;
+      incE.style.transform="translateY(-40px)";
+      setTimeout(()=>incE.style.opacity=0,800);
+    }
   }
 });
 
 // メインループ
-let last=Date.now();
 setInterval(()=>{
   const now=Date.now();
   const dt=(now-last)/1000; last=now;
-  const mult=Math.floor(st.count/10000)+1;
-  st.count+=dt*(active?1:2)*mult;
-  st.last=Date.now();
-  save(); saveScore(); ui(mult,!active);
-},50);
+  const m=Math.floor(countVal/10000)+1;
+  countVal+=dt*m;
+
+  ce.textContent=Math.floor(countVal).toLocaleString();
+  me.textContent="×"+m;
+  ce.classList.add("glow");
+  setTimeout(()=>ce.classList.remove("glow"),150);
+
+  set(ref(db,"scores/"+uid),{
+    count:Math.floor(countVal),
+    t:Date.now()
+  });
+},100);
+
+// リアルタイムランキング
+onValue(ref(db,"scores"),s=>{
+  let a=[];
+  s.forEach(c=>a.push(c.val()));
+  a.sort((x,y)=>y.count-x.count);
+  const r=a.findIndex(v=>v.count===Math.floor(countVal))+1;
+  lbE.textContent=`${r} / ${a.length}`;
+});
+
+// 背景
+function theme(){
+  const h=new Date().getHours();
+  const c=h<6?["#7b5cff","#2b145c"]:h<18?["#7cfbff","#5effc6"]:["#ffb86c","#ff8c42"];
+  document.documentElement.style.setProperty("--main",c[0]);
+  bg.style.background=`radial-gradient(circle,${c[1]},#000)`;
+}
+theme();setInterval(theme,60000);
+
+// 粒子
+const cv=c,x=cv.getContext("2d");
+cv.width=innerWidth;cv.height=innerHeight;
+let p=[...Array(120)].map(()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3}));
+(function loop(){
+  x.clearRect(0,0,cv.width,cv.height);
+  p.forEach(o=>{
+    o.x+=o.vx;o.y+=o.vy;
+    if(o.x<0||o.x>cv.width)o.vx*=-1;
+    if(o.y<0||o.y>cv.height)o.vy*=-1;
+    x.fillRect(o.x,o.y,2,2);
+  });
+  requestAnimationFrame(loop);
+})();
 </script>
 </body>
 </html>
