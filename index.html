@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Focus Density</title>
-
 <style>
 :root{--main:#7cfbff;}
 body{
@@ -14,7 +13,6 @@ body{
 }
 #bg{position:absolute;inset:0;filter:blur(160px);z-index:-3}
 canvas{position:absolute;inset:0;z-index:-2}
-
 .card{text-align:center;position:relative}
 .count{font-size:9rem;font-weight:100}
 .leaderboard{opacity:.6;margin-top:6px}
@@ -22,20 +20,19 @@ canvas{position:absolute;inset:0;z-index:-2}
 .increase{
   position:absolute;bottom:20px;
   font-size:1.5rem;
-  opacity:0;
-  transition:.8s;
+  opacity:0;transition:.8s;
 }
 </style>
 </head>
-
 <body>
+
 <div id="bg"></div>
 <canvas id="c"></canvas>
 
 <div class="card">
   <div class="count" id="count">0</div>
   <div class="leaderboard" id="lb">- / -</div>
-  <div class="rank" id="multi">×1</div>
+  <div class="rank" id="stage">×1</div>
   <div class="increase" id="inc"></div>
 </div>
 
@@ -49,26 +46,29 @@ const app = initializeApp({
 });
 const db = getDatabase(app);
 
-// UID
-if(!localStorage.uid) localStorage.uid="u"+Math.random().toString(36).slice(2);
-const uid=localStorage.uid;
+/* UID */
+if(!localStorage.uid){
+  localStorage.uid="u"+Math.random().toString(36).slice(2);
+}
+const uid = localStorage.uid;
 
-// 状態
-let countVal=0;
-let last=Date.now();
+/* 状態 */
+let countVal = 0;
+let last = Date.now();
 
-// Firebase復元（最優先）
+/* Firebase復元 */
 const snap = await get(ref(db,"scores/"+uid));
 if(snap.exists()) countVal = snap.val().count || 0;
 
-// UI
-const ce=count, lbE=lb, me=multi, incE=inc;
+/* UI */
+const ce=count, lbE=lb, stE=stage, incE=inc;
 
-// 非表示中カウント
+/* 非表示加算 */
 let hiddenAt=0;
 document.addEventListener("visibilitychange",()=>{
-  if(document.hidden) hiddenAt=Date.now();
-  else{
+  if(document.hidden){
+    hiddenAt=Date.now();
+  }else{
     const g=Math.floor((Date.now()-hiddenAt)/1000)*2;
     if(g>0){
       countVal+=g;
@@ -80,15 +80,17 @@ document.addEventListener("visibilitychange",()=>{
   }
 });
 
-// メインループ（光らない）
+/* メインループ */
 setInterval(()=>{
   const now=Date.now();
-  const dt=(now-last)/1000; last=now;
-  const m=Math.floor(countVal/10000)+1;
-  countVal+=dt*m;
+  const dt=(now-last)/1000;
+  last=now;
+
+  countVal+=dt;
+  const stage=Math.floor(countVal/10000)+1;
 
   ce.textContent=Math.floor(countVal).toLocaleString();
-  me.textContent="×"+m;
+  stE.textContent="×"+stage;
 
   set(ref(db,"scores/"+uid),{
     count:Math.floor(countVal),
@@ -96,16 +98,17 @@ setInterval(()=>{
   });
 },100);
 
-// リアルタイムランキング
-onValue(ref(db,"scores"),s=>{
-  let a=[];
-  s.forEach(c=>a.push(c.val()));
-  a.sort((x,y)=>y.count-x.count);
-  const r=a.findIndex(v=>v.count===Math.floor(countVal))+1;
-  lbE.textContent=`${r} / ${a.length}`;
+/* 正しいランキング（自分より多い人数） */
+onValue(ref(db,"scores"),snap=>{
+  let higher=0,total=0;
+  snap.forEach(c=>{
+    total++;
+    if(c.val().count > Math.floor(countVal)) higher++;
+  });
+  lbE.textContent = `${higher+1} / ${total}`;
 });
 
-// 背景
+/* 背景 */
 function theme(){
   const h=new Date().getHours();
   const c=h<6?["#7b5cff","#2b145c"]:
@@ -116,16 +119,11 @@ function theme(){
 }
 theme(); setInterval(theme,60000);
 
-// canvas
-const cv=c, ctx=cv.getContext("2d");
-function resize(){
-  cv.width=innerWidth;
-  cv.height=innerHeight;
-}
-window.addEventListener("resize",resize);
-resize();
+/* canvas */
+const cv=c,ctx=cv.getContext("2d");
+function resize(){cv.width=innerWidth;cv.height=innerHeight}
+addEventListener("resize",resize);resize();
 
-// 粒子（静か）
 let p=[...Array(120)].map(()=>({
   x:Math.random()*cv.width,
   y:Math.random()*cv.height,
@@ -135,7 +133,7 @@ let p=[...Array(120)].map(()=>({
 (function loop(){
   ctx.clearRect(0,0,cv.width,cv.height);
   p.forEach(o=>{
-    o.x+=o.vx; o.y+=o.vy;
+    o.x+=o.vx;o.y+=o.vy;
     if(o.x<0||o.x>cv.width)o.vx*=-1;
     if(o.y<0||o.y>cv.height)o.vy*=-1;
     ctx.fillStyle="rgba(255,255,255,.4)";
