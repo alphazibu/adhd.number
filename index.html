@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Focus Density</title>
 <style>
+/* デザインは完全に元のまま */
 :root{--m:#7cfbff}body{margin:0;height:100vh;overflow:hidden;display:flex;justify-content:center;align-items:center;background:#020808;color:#fff;font-family:system-ui}#b{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}canvas{position:absolute;inset:0;z-index:-2}.c{width:340px;text-align:center;position:relative}.cnt{font-size:9rem;font-weight:100;line-height:1}.g{text-shadow:0 0 35px var(--m);color:#fff}.l{margin-top:10px;font-size:1.4rem;font-weight:200;opacity:.6;letter-spacing:2px}.r{margin-top:40px;opacity:.3;font-size:.9rem;letter-spacing:1px}.p{font-size:1.8rem;color:var(--m);position:absolute;left:50%;bottom:0;transform:translateX(-50%);opacity:0;pointer-events:none;font-weight:bold}
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-M1S3L1RBG4"></script>
@@ -26,7 +27,7 @@
 
 <script type="module">
 import{initializeApp as _a}from"https://www.gstatic.com/firebasejs/10.2.0/firebase-app.js";
-import{getDatabase as _b,ref as _c,set as _d,onValue as _e,remove as _f,get as _g,query as _q,orderByChild as _ob}from"https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
+import{getDatabase as _b,ref as _c,set as _d,onValue as _e,remove as _f,get as _g}from"https://www.gstatic.com/firebasejs/10.2.0/firebase-database.js";
 
 const _conf={apiKey:"AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",authDomain:"adhd-timer-f5d96.firebaseapp.com",databaseURL:"https://adhd-timer-f5d96-default-rtdb.firebaseio.com",projectId:"adhd-timer-f5d96",storageBucket:"adhd-timer-f5d96.firebasestorage.app",messagingSenderId:"172916262460",appId:"1:172916262460:web:c87ffd8e29a54dc18d6539"};
 const _db=_b(_a(_conf)),_D=document,_X1=_D.getElementById('x1'),_X2=_D.getElementById('x2'),_X3=_D.getElementById('x3'),_X4=_D.getElementById('x4'),_B=_D.getElementById('b');
@@ -50,24 +51,26 @@ _D.addEventListener('visibilitychange',()=>{
   else{
     _act=1;
     const e=(Date.now()-_iS)/1000,g=e*2;
-    if(g>=1){
-      _s.c+=g;
-      while(_s.c>=1e4){_s.c-=1e4;_s.m++}
-      _ani(g);
-    }
+    if(g>=1){ _s.c+=g; while(_s.c>=1e4){_s.c-=1e4;_s.m++} _ani(g); }
   }
 });
 
+// 保存時に「s」を必ず含める
 const _sv=()=>_d(_c(_db,'scores/'+_id),{
   m:_s.m, c:Math.floor(_s.c), s:((_s.m-1)*10000)+Math.floor(_s.c), i:_id, t:Date.now()
 });
 
-// ランキング取得：通算スコア「s」でソート
-const _rRef = _q(_c(_db,'scores/'), _ob('s'));
-_e(_rRef, k=>{
+// ランキング取得：データが古くても計算して表示する
+_e(_c(_db,'scores/'), k=>{
   let a=[];
-  k.forEach(x=>{a.push({i:x.key,...x.val()})});
-  a.reverse(); // 降順にする
+  k.forEach(x=>{
+    let d=x.val();
+    // 通算スコア「s」がない古いデータなら、その場で計算して補完する
+    let score = d.s !== undefined ? d.s : ((d.m-1)*10000) + d.c;
+    a.push({i:x.key, ...d, s:score});
+  });
+  // スコア順に並び替え
+  a.sort((p,q)=>q.s - p.s);
   _X2.textContent=(a.findIndex(z=>z.i===_id)+1)+' / '+a.length;
 });
 
@@ -77,10 +80,7 @@ setInterval(_sv,5000);
   const dt=(t-_lt)/1000;_lt=t;
   if(_act){
     _s.c+=dt*1;
-    if(_s.c>=1e4){
-      _s.c-=1e4; _s.m++;
-      _X1.classList.add('g'); setTimeout(()=>_X1.classList.remove('g'),500);
-    }
+    if(_s.c>=1e4){ _s.c-=1e4; _s.m++; _X1.classList.add('g'); setTimeout(()=>_X1.classList.remove('g'),500); }
     _X1.textContent=Math.floor(_s.c).toLocaleString();
     _X3.textContent='×'+_s.m;
   }
@@ -88,6 +88,7 @@ setInterval(_sv,5000);
   requestAnimationFrame(_tick);
 })(performance.now());
 
+// パーティクル背景
 const _cv=_D.getElementById('v'),_ct=_cv.getContext('2d');
 _cv.width=innerWidth;_cv.height=innerHeight;
 let _ps=[...Array(180)].map(()=>({x:Math.random()*_cv.width,y:Math.random()*_cv.height,a:Math.random()-.5,b:Math.random()-.5,s:Math.random()}));
