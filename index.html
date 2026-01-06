@@ -29,14 +29,53 @@ import{getDatabase as _b,ref as _c,set as _d,onValue as _e,remove as _f,get as _
 const _conf={apiKey:"AIzaSyAYH1Toi-3rGehVEUiF1bg-7XKwEeysXps",authDomain:"adhd-timer-f5d96.firebaseapp.com",databaseURL:"https://adhd-timer-f5d96-default-rtdb.firebaseio.com",projectId:"adhd-timer-f5d96",storageBucket:"adhd-timer-f5d96.firebasestorage.app",messagingSenderId:"172916262460",appId:"1:172916262460:web:c87ffd8e29a54dc18d6539"};
 const _db=_b(_a(_conf)),_D=document,_X1=_D.getElementById('x1'),_X2=_D.getElementById('x2'),_X3=_D.getElementById('x3'),_X4=_D.getElementById('x4'),_B=_D.getElementById('b');
 let _s=JSON.parse(localStorage.getItem('fd_l'))||{c:0,m:1},_id=localStorage.getItem('ui')||'u'+Math.random().toString(36).substr(2,5);localStorage.setItem('ui',_id);
+
 const _ani=(_v)=>{_X4.textContent='+'+Math.floor(_v);_X4.style.opacity=1;let s=performance.now();requestAnimationFrame(function f(t){let e=(t-s)/800;if(e>1){_X4.style.opacity=0;return}_X4.style.transform=`translateX(-50%) translateY(${-60*e}px)`;_X4.style.opacity=1-e;requestAnimationFrame(f)})};
 const _th=()=>{const h=new Date().getHours(),t=h<6?["#7b5cff","#2b145c"]:h<12?["#7cfbff","#a0f0ff"]:h<18?["#5effc6","#7cffd6"]:["#ffb86c","#ff8c42"];_D.documentElement.style.setProperty("--m",t[0]);_B.style.background=`radial-gradient(circle,${t[1]},#000)`};
 _th();setInterval(_th,6e4);let _act=1,_lt=performance.now(),_iS=Date.now();
+
 _D.addEventListener('visibilitychange',()=>{if(_D.hidden){_act=0;_iS=Date.now()}else{_act=1;const e=(Date.now()-_iS)/1000,g=e*2;if(g>=1){_s.c+=g;while(_s.c>=1e4){_s.c-=1e4;_s.m++}_ani(g);if(window.gtag)gtag('event','afk_return',{'value':g})}}});
-const _sv=()=>_d(_c(_db,'scores/'+_id),{m:_s.m,c:Math.floor(_s.c),i:_id,t:Date.now()});
+
+// スコア同期処理 (通算スコア s を追加)
+const _sv=()=>_d(_c(_db,'scores/'+_id),{
+    m:_s.m,
+    c:Math.floor(_s.c),
+    s:((_s.m-1)*10000)+Math.floor(_s.c), // 通算スコア
+    i:_id,
+    t:Date.now()
+});
+
 const _cp=async()=>{const r=_c(_db,'scores/');const s=await _g(r);const n=Date.now();const m=30*24*60*60*1000;s.forEach(c=>{if(c.val().t&&n-c.val().t>m){_f(_c(_db,'scores/'+c.key))}})};
-_cp();_e(_c(_db,'scores/'),k=>{let a=[];k.forEach(x=>{a.push({i:x.key,...x.val()})});a.sort((p,q)=>(q.m-p.m)||(q.c-p.c));_X2.textContent=(a.findIndex(z=>z.i===_id)+1)+' / '+a.length});
-setInterval(_sv,5000);(function _tick(t){const dt=(t-_lt)/1000;_lt=t;if(_act){_s.c+=dt*1;if(_s.c>=1e4){_s.c=0;_s.m++;_X1.classList.add('g');setTimeout(()=>_X1.classList.remove('g'),500);if(window.gtag)gtag('event','level_up',{'level':_s.m})}_X1.textContent=Math.floor(_s.c).toLocaleString();_X3.textContent='×'+_s.m}localStorage.setItem('fd_l',JSON.stringify(_s));requestAnimationFrame(_tick)})(performance.now());
+_cp();
+
+// ランキング取得処理 (通算スコア s でソート)
+_e(_c(_db,'scores/'),k=>{
+    let a=[];
+    k.forEach(x=>{a.push({i:x.key,...x.val()})});
+    a.sort((p,q)=>((q.s||0)-(p.s||0)));
+    _X2.textContent=(a.findIndex(z=>z.i===_id)+1)+' / '+a.length;
+});
+
+setInterval(_sv,5000);
+
+(function _tick(t){
+    const dt=(t-_lt)/1000;_lt=t;
+    if(_act){
+        _s.c+=dt*1;
+        if(_s.c>=1e4){
+            _s.c-=1e4; // 0リセットではなく端数を持ち越し
+            _s.m++;
+            _X1.classList.add('g');
+            setTimeout(()=>_X1.classList.remove('g'),500);
+            if(window.gtag)gtag('event','level_up',{'level':_s.m});
+        }
+        _X1.textContent=Math.floor(_s.c).toLocaleString();
+        _X3.textContent='×'+_s.m;
+    }
+    localStorage.setItem('fd_l',JSON.stringify(_s));
+    requestAnimationFrame(_tick);
+})(performance.now());
+
 const _cv=_D.getElementById('v'),_ct=_cv.getContext('2d');_cv.width=innerWidth;_cv.height=innerHeight;let _ps=[...Array(180)].map(()=>({x:Math.random()*_cv.width,y:Math.random()*_cv.height,a:Math.random()-.5,b:Math.random()-.5,s:Math.random()}));
 (function _lp(){_ct.clearRect(0,0,_cv.width,_cv.height);_ps.forEach(p=>{p.x+=p.a*0.3;p.y+=p.b*0.3;if(p.x<0||p.x>_cv.width)p.a*=-1;if(p.y<0||p.y>_cv.height)p.b*=-1;_ct.fillStyle=`rgba(255,255,255,${p.s})`;_ct.beginPath();_ct.arc(p.x,p.y,2,0,6.28);_ct.fill()});requestAnimationFrame(_lp)})();
 </script>
