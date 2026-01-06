@@ -43,7 +43,7 @@ const _th=()=>{
 };
 _th();setInterval(_th,6e4);
 
-let _act=1,_lt=performance.now(),_iS=Date.now();
+let _act=1,_lt=performance.now();
 
 _D.addEventListener('visibilitychange',()=>_act=!_D.hidden);
 
@@ -51,18 +51,18 @@ const _sv=()=>_d(_c(_db,'scores/'+_id),{
   m:_s.m, c:Math.floor(_s.c), s:((_s.m-1)*10000)+Math.floor(_s.c), i:_id, t:Date.now()
 });
 
-// --- ランキング表示ロジック (古いデータ対応版) ---
+// ランキング表示（全データ取得・手動ソート版：不整合に強い）
 _e(_c(_db,'scores/'), k=>{
   let a=[];
   k.forEach(x=>{
     let d=x.val();
-    // もし s がない古いデータならその場で計算
+    // sがない古いデータもその場で計算して救済する
     let sc = (d.s !== undefined) ? d.s : (((d.m||1)-1)*10000) + (d.c||0);
     a.push({i:x.key, ...d, s:sc});
   });
-  // 並び替え
   a.sort((p,q)=> (q.s||0) - (p.s||0));
-  _X2.textContent=(a.findIndex(z=>z.i===_id)+1)+' / '+a.length;
+  const rank = a.findIndex(z=>z.i===_id)+1;
+  _X2.textContent = rank > 0 ? (rank + ' / ' + a.length) : ('- / ' + a.length);
 });
 
 setInterval(_sv,5000);
@@ -79,6 +79,7 @@ setInterval(_sv,5000);
   requestAnimationFrame(_tick);
 })(performance.now());
 
+// パーティクル背景（デザイン完全復元）
 const _cv=_D.getElementById('v'),_ct=_cv.getContext('2d');
 _cv.width=innerWidth;_cv.height=innerHeight;
 let _ps=[...Array(180)].map(()=>({x:Math.random()*_cv.width,y:Math.random()*_cv.height,a:Math.random()-.5,b:Math.random()-.5,s:Math.random()}));
