@@ -3,24 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Focus Density</title>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-M1S3L1RBG4"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-M1S3L1RBG4');
-</script>
+<title>Focus Density - Optimized</title>
 <style>
 :root{--m:#7cfbff}
-body{margin:0;height:100vh;overflow:hidden;display:flex;justify-content:center;align-items:center;background:#020808;color:#fff;font-family:system-ui}
-#b{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}
-canvas{position:absolute;inset:0;z-index:-2}
+body{margin:0;height:100vh;overflow:hidden;display:flex;justify-content:center;align-items:center;background:#020808;color:#fff;font-family:system-ui;user-select:none}
+#b{position:absolute;inset:0;filter:blur(100px);z-index:-3;transition:background 2s;will-change:background}
+canvas{position:absolute;inset:0;z-index:-2;pointer-events:none}
 .c{width:340px;text-align:center;position:relative}
-.cnt{font-size:9rem;font-weight:100;line-height:1}
+.cnt{font-size:8rem;font-weight:100;line-height:1;font-variant-numeric:tabular-nums}
 .g{text-shadow:0 0 35px var(--m);color:#fff}
 .r{margin-top:40px;opacity:.3;font-size:.9rem;letter-spacing:1px}
-.p{font-size:1.8rem;color:var(--m);position:absolute;left:50%;bottom:0;transform:translateX(-50%);opacity:0;pointer-events:none;font-weight:bold}
+.p{font-size:1.8rem;color:var(--m);position:absolute;left:50%;bottom:0;transform:translateX(-50%);opacity:0;font-weight:bold}
 </style>
 </head>
 <body>
@@ -28,95 +21,122 @@ canvas{position:absolute;inset:0;z-index:-2}
 <canvas id="v"></canvas>
 
 <div class="c">
-<div class="cnt" id="x1">0</div>
-<div class="r" id="x3">×1</div>
-<div class="p" id="x4"></div>
+    <div class="cnt" id="x1">0</div>
+    <div class="r" id="x3">×1</div>
+    <div id="x4" class="p"></div>
 </div>
 
 <script>
-const _D=document,_X1=_D.getElementById('x1'),_X3=_D.getElementById('x3'),_X4=_D.getElementById('x4'),_B=_D.getElementById('b');
+const D=document, X1=D.getElementById('x1'), X3=D.getElementById('x3'), X4=D.getElementById('x4'), B=D.getElementById('b');
 
-// 保存データの読み込み（数値を確実にNumber型にする）
-let _raw=JSON.parse(localStorage.getItem('fd_l'))||{c:0,m:1};
-let _s={c:Number(_raw.c),m:Number(_raw.m)};
+// データ管理
+let s = JSON.parse(localStorage.getItem('fd_l')) || {c:0, m:1};
+s.c = Number(s.c); s.m = Number(s.m);
 
-const _ani=(_v)=>{
-  _X4.textContent='+'+Math.floor(_v);
-  _X4.style.opacity=1;
-  let s=performance.now();
-  requestAnimationFrame(function f(t){
-    let e=(t-s)/800;
-    if(e>1){_X4.style.opacity=0;return}
-    _X4.style.transform=`translateX(-50%) translateY(${-60*e}px)`;
-    _X4.style.opacity=1-e;
-    requestAnimationFrame(f)
-  })
+// 定数
+const LV_UP = 10000;
+
+// アニメーション: 離席復帰時のスコア加算表示
+const showPop = (val) => {
+    X4.textContent = `+${Math.floor(val)}`;
+    X4.animate([
+        { transform: 'translateX(-50%) translateY(0)', opacity: 1 },
+        { transform: 'translateX(-50%) translateY(-60px)', opacity: 0 }
+    ], { duration: 800, easing: 'ease-out' });
 };
 
-const _th=()=>{
-  const h=new Date().getHours(),t=h<6?["#7b5cff","#2b145c"]:h<12?["#7cfbff","#a0f0ff"]:h<18?["#5effc6","#7cffd6"]:["#ffb86c","#ff8c42"];
-  _D.documentElement.style.setProperty("--m",t[0]);
-  _B.style.background=`radial-gradient(circle,${t[1]},#000)`;
+// 背景色・テーマ更新（1分に1回程度で十分）
+const updateTheme = () => {
+    const h = new Date().getHours();
+    const t = h<6 ? ["#7b5cff","#2b145c"] : h<12 ? ["#7cfbff","#a0f0ff"] : h<18 ? ["#5effc6","#7cffd6"] : ["#ffb86c","#ff8c42"];
+    D.documentElement.style.setProperty("--m", t[0]);
+    B.style.background = `radial-gradient(circle, ${t[1]}, #000)`;
 };
-_th();setInterval(_th,6e4);
+updateTheme();
+setInterval(updateTheme, 60000);
 
-let _act=1,_lt=performance.now(),_iS=Date.now();
+let lastTime = performance.now();
+let lastSave = 0;
 
-// レベルアップ判定の共通関数
-const _upd=()=>{
-  while(_s.c>=1e4){
-    _s.c-=1e4;
-    _s.m++;
-    _X1.classList.add('g');
-    setTimeout(()=>_X1.classList.remove('g'),500);
-    if(window.gtag) gtag('event', 'level_up', { 'level': _s.m });
-  }
-  _X1.textContent=Math.floor(_s.c).toLocaleString();
-  _X3.textContent='×'+_s.m;
-};
+// メインループ
+function tick(t) {
+    const dt = (t - lastTime) / 1000;
+    lastTime = t;
 
-_D.addEventListener('visibilitychange',()=>{
-  if(_D.hidden){
-    _act=0;
-    _iS=Date.now();
-  } else {
-    _act=1;
-    const gap=(Date.now()-_iS)/1000;
-    if(gap>=1){
-      _s.c+=gap;
-      _ani(gap);
-      _upd(); // 戻った瞬間にレベル判定
+    if (!D.hidden) {
+        s.c += dt;
+        
+        // レベルアップ判定
+        if (s.c >= LV_UP) {
+            s.c -= LV_UP;
+            s.m++;
+            X1.classList.add('g');
+            setTimeout(() => X1.classList.remove('g'), 500);
+            if (window.gtag) gtag('event', 'level_up', { 'level': s.m });
+        }
+
+        // 表示更新（整数部が変わった時だけDOM操作）
+        const displayVal = Math.floor(s.c).toLocaleString();
+        if (X1.textContent !== displayVal) {
+            X1.textContent = displayVal;
+            X3.textContent = '×' + s.m;
+        }
     }
-    _lt=performance.now();
-  }
+
+    // ストレージ保存（1秒に1回程度に抑える）
+    if (t - lastSave > 1000) {
+        localStorage.setItem('fd_l', JSON.stringify(s));
+        lastSave = t;
+    }
+    requestAnimationFrame(tick);
+}
+
+// 離席復帰処理
+let leaveTime = Date.now();
+D.addEventListener('visibilitychange', () => {
+    if (D.hidden) {
+        leaveTime = Date.now();
+    } else {
+        const gap = (Date.now() - leaveTime) / 1000;
+        if (gap >= 1) {
+            s.c += gap;
+            showPop(gap);
+        }
+        lastTime = performance.now();
+    }
 });
 
-(function _tick(t){
-  const dt=(t-_lt)/1000;
-  _lt=t;
-  if(_act){
-    _s.c+=dt;
-    _upd(); // 毎フレームレベル判定
-  }
-  localStorage.setItem('fd_l',JSON.stringify(_s));
-  requestAnimationFrame(_tick);
-})(performance.now());
+// Canvasパーティクル
+const cv = D.getElementById('v'), ct = cv.getContext('2d', { alpha: false });
+const res = () => { cv.width = innerWidth; cv.height = innerHeight; };
+window.addEventListener('resize', res);
+res();
 
-const _cv=_D.getElementById('v'),_ct=_cv.getContext('2d');
-const _res=()=>{_cv.width=innerWidth;_cv.height=innerHeight;};
-window.onresize=_res;_res();
-let _ps=[...Array(180)].map(()=>({x:Math.random()*_cv.width,y:Math.random()*_cv.height,a:Math.random()-.5,b:Math.random()-.5,s:Math.random()}));
-(function _lp(){
-  _ct.clearRect(0,0,_cv.width,_cv.height);
-  _ps.forEach(p=>{
-    p.x+=p.a*0.3;p.y+=p.b*0.3;
-    if(p.x<0)p.x=_cv.width;if(p.x>_cv.width)p.x=0;
-    if(p.y<0)p.y=_cv.height;if(p.y>_cv.height)p.y=0;
-    _ct.fillStyle=`rgba(255,255,255,${p.s})`;
-    _ct.beginPath();_ct.arc(p.x,p.y,1.5,0,6.28);_ct.fill()
-  });
-  requestAnimationFrame(_lp)
-})();
+const ps = Array.from({length: 120}, () => ({
+    x: Math.random() * cv.width,
+    y: Math.random() * cv.height,
+    vx: (Math.random() - 0.5) * 0.4,
+    vy: (Math.random() - 0.5) * 0.4,
+    o: Math.random()
+}));
+
+function draw() {
+    ct.fillStyle = '#020808'; // 背景色で塗りつぶし（clearRectより早い場合がある）
+    ct.fillRect(0, 0, cv.width, cv.height);
+    ct.fillStyle = '#fff';
+    
+    ps.forEach(p => {
+        p.x = (p.x + p.vx + cv.width) % cv.width;
+        p.y = (p.y + p.vy + cv.height) % cv.height;
+        ct.globalAlpha = p.o;
+        ct.fillRect(p.x, p.y, 1.5, 1.5); // arcよりfillRectの方が描画コストが低い
+    });
+    ct.globalAlpha = 1;
+    requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(tick);
+requestAnimationFrame(draw);
 </script>
 </body>
 </html>
