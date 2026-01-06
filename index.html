@@ -12,7 +12,6 @@
   gtag('config', 'G-M1S3L1RBG4');
 </script>
 <style>
-/* デザインの完全維持 */
 :root{--m:#7cfbff}
 body{margin:0;height:100vh;overflow:hidden;display:flex;justify-content:center;align-items:center;background:#020808;color:#fff;font-family:system-ui}
 #b{position:absolute;inset:0;filter:blur(160px);z-index:-3;transition:2s}
@@ -21,6 +20,7 @@ canvas{position:absolute;inset:0;z-index:-2}
 .cnt{font-size:9rem;font-weight:100;line-height:1}
 .g{text-shadow:0 0 35px var(--m);color:#fff}
 .r{margin-top:40px;opacity:.3;font-size:.9rem;letter-spacing:1px}
+.p{font-size:1.8rem;color:var(--m);position:absolute;left:50%;bottom:0;transform:translateX(-50%);opacity:0;pointer-events:none;font-weight:bold}
 </style>
 </head>
 <body>
@@ -30,15 +30,29 @@ canvas{position:absolute;inset:0;z-index:-2}
 <div class="c">
 <div class="cnt" id="x1">0</div>
 <div class="r" id="x3">×1</div>
+<div class="p" id="x4"></div>
 </div>
 
 <script>
-const _D=document,_X1=_D.getElementById('x1'),_X3=_D.getElementById('x3'),_B=_D.getElementById('b');
+const _D=document,_X1=_D.getElementById('x1'),_X3=_D.getElementById('x3'),_X4=_D.getElementById('x4'),_B=_D.getElementById('b');
 
-// ローカル保存（ブラウザ内保存のみ）
-let _s=JSON.parse(localStorage.getItem('fd_l'))||{c:0,m:1};
+// 保存データの読み込み（数値を確実にNumber型にする）
+let _raw=JSON.parse(localStorage.getItem('fd_l'))||{c:0,m:1};
+let _s={c:Number(_raw.c),m:Number(_raw.m)};
 
-// 背景グラデーション（時間帯による色変化）
+const _ani=(_v)=>{
+  _X4.textContent='+'+Math.floor(_v);
+  _X4.style.opacity=1;
+  let s=performance.now();
+  requestAnimationFrame(function f(t){
+    let e=(t-s)/800;
+    if(e>1){_X4.style.opacity=0;return}
+    _X4.style.transform=`translateX(-50%) translateY(${-60*e}px)`;
+    _X4.style.opacity=1-e;
+    requestAnimationFrame(f)
+  })
+};
+
 const _th=()=>{
   const h=new Date().getHours(),t=h<6?["#7b5cff","#2b145c"]:h<12?["#7cfbff","#a0f0ff"]:h<18?["#5effc6","#7cffd6"]:["#ffb86c","#ff8c42"];
   _D.documentElement.style.setProperty("--m",t[0]);
@@ -46,40 +60,52 @@ const _th=()=>{
 };
 _th();setInterval(_th,6e4);
 
-let _act=1,_lt=performance.now();
-_D.addEventListener('visibilitychange',()=>_act=!_D.hidden);
+let _act=1,_lt=performance.now(),_iS=Date.now();
 
-// タイマー更新ループ
+// レベルアップ判定の共通関数
+const _upd=()=>{
+  while(_s.c>=1e4){
+    _s.c-=1e4;
+    _s.m++;
+    _X1.classList.add('g');
+    setTimeout(()=>_X1.classList.remove('g'),500);
+    if(window.gtag) gtag('event', 'level_up', { 'level': _s.m });
+  }
+  _X1.textContent=Math.floor(_s.c).toLocaleString();
+  _X3.textContent='×'+_s.m;
+};
+
+_D.addEventListener('visibilitychange',()=>{
+  if(_D.hidden){
+    _act=0;
+    _iS=Date.now();
+  } else {
+    _act=1;
+    const gap=(Date.now()-_iS)/1000;
+    if(gap>=1){
+      _s.c+=gap;
+      _ani(gap);
+      _upd(); // 戻った瞬間にレベル判定
+    }
+    _lt=performance.now();
+  }
+});
+
 (function _tick(t){
-  const dt=(t-_lt)/1000;_lt=t;
+  const dt=(t-_lt)/1000;
+  _lt=t;
   if(_act){
     _s.c+=dt;
-    if(_s.c>=1e4){
-      _s.c-=1e4;
-      _s.m++;
-      _X1.classList.add('g'); // レベルアップ時の発光エフェクト
-      setTimeout(()=>_X1.classList.remove('g'),500);
-      // レベルアップを解析イベントとして送信
-      if(window.gtag) gtag('event', 'level_up', { 'level': _s.m });
-    }
-    _X1.textContent=Math.floor(_s.c).toLocaleString(); // カンマ区切り
-    _X3.textContent='×'+_s.m;
+    _upd(); // 毎フレームレベル判定
   }
   localStorage.setItem('fd_l',JSON.stringify(_s));
   requestAnimationFrame(_tick);
 })(performance.now());
 
-// パーティクル（動く星）
 const _cv=_D.getElementById('v'),_ct=_cv.getContext('2d');
 const _res=()=>{_cv.width=innerWidth;_cv.height=innerHeight;};
 window.onresize=_res;_res();
-let _ps=[...Array(180)].map(()=>({
-  x:Math.random()*_cv.width,
-  y:Math.random()*_cv.height,
-  a:Math.random()-.5,
-  b:Math.random()-.5,
-  s:Math.random()
-}));
+let _ps=[...Array(180)].map(()=>({x:Math.random()*_cv.width,y:Math.random()*_cv.height,a:Math.random()-.5,b:Math.random()-.5,s:Math.random()}));
 (function _lp(){
   _ct.clearRect(0,0,_cv.width,_cv.height);
   _ps.forEach(p=>{
