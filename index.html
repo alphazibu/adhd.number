@@ -9,21 +9,10 @@
 </style>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-M1S3L1RBG4"></script>
 <script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-M1S3L1RBG4');
-
-  // --- DevTools Protection ---
+  window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-M1S3L1RBG4');
   document.addEventListener('contextmenu', e => e.preventDefault());
-  document.onkeydown = e => {
-    if (e.keyCode === 123 || (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || (e.ctrlKey && e.keyCode === 85)) return false;
-  };
-  setInterval(() => {
-    const s = performance.now();
-    debugger; 
-    if (performance.now() - s > 50) window.location.reload();
-  }, 500);
+  document.onkeydown = e => { if (e.keyCode === 123 || (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || (e.ctrlKey && e.keyCode === 85)) return false; };
+  setInterval(() => { const s = performance.now(); debugger; if (performance.now() - s > 50) window.location.reload(); }, 500);
 </script>
 </head>
 <body>
@@ -65,34 +54,20 @@ _D.addEventListener('visibilitychange',()=>{
       _s.c+=g;
       while(_s.c>=1e4){_s.c-=1e4;_s.m++}
       _ani(g);
-      if(window.gtag)gtag('event','afk_ret',{'val':Math.floor(g)});
     }
   }
 });
 
 const _sv=()=>_d(_c(_db,'scores/'+_id),{
-  m:_s.m,
-  c:Math.floor(_s.c),
-  s:((_s.m-1)*10000)+Math.floor(_s.c), // 通算スコア s
-  i:_id,
-  t:Date.now()
+  m:_s.m, c:Math.floor(_s.c), s:((_s.m-1)*10000)+Math.floor(_s.c), i:_id, t:Date.now()
 });
 
-const _cp=async()=>{
-  const r=_c(_db,'scores/');
-  const s=await _g(r);
-  const n=Date.now();
-  const m=30*24*60*60*1000;
-  s.forEach(c=>{if(c.val().t&&n-c.val().t>m){_f(_c(_db,'scores/'+c.key))}})
-};
-_cp();
-
-// ランキング取得ロジック（s でソート）
+// ランキング取得：通算スコア「s」でソート
 const _rRef = _q(_c(_db,'scores/'), _ob('s'));
 _e(_rRef, k=>{
   let a=[];
   k.forEach(x=>{a.push({i:x.key,...x.val()})});
-  a.reverse(); // 降順
+  a.reverse(); // 降順にする
   _X2.textContent=(a.findIndex(z=>z.i===_id)+1)+' / '+a.length;
 });
 
@@ -103,11 +78,8 @@ setInterval(_sv,5000);
   if(_act){
     _s.c+=dt*1;
     if(_s.c>=1e4){
-      _s.c-=1e4;
-      _s.m++;
-      _X1.classList.add('g');
-      setTimeout(()=>_X1.classList.remove('g'),500);
-      if(window.gtag)gtag('event','lvl_up',{'lv':_s.m});
+      _s.c-=1e4; _s.m++;
+      _X1.classList.add('g'); setTimeout(()=>_X1.classList.remove('g'),500);
     }
     _X1.textContent=Math.floor(_s.c).toLocaleString();
     _X3.textContent='×'+_s.m;
